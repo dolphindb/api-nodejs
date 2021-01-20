@@ -4,9 +4,10 @@ const TableCheck = require("./TableCheck");
 const VectorCheck = require("./VectorCheck");
 
 class StreamReader {
-    constructor () {
+    constructor (parser) {
         this.hlen = 17;
         this.msgid = 0n;
+        this.parser = parser;
     }
     init() {
         this.isSmall = true;
@@ -23,7 +24,11 @@ class StreamReader {
         this.tc = null;
         this.vc = null;
         this.isful = false;
+        this.result = null;
         return this;
+    }
+    getResult () {
+        return this.result;
     }
     readInt(bs){
         if (this.isSmall)
@@ -59,6 +64,7 @@ class StreamReader {
                 }
                 this.buf = null;
                 this.isSmall = cbuf[0]===1;
+                this.parser.isSmall = this.isSmall;
                 let _x = this.readLong(cbuf.slice(1));
                 let msgid = this.readLong(cbuf.slice(9));
                 this.nrow2r = Number(msgid - this.msgid);
@@ -102,13 +108,11 @@ class StreamReader {
                 } else if (this.df === 1) {
                     this.state = 4;
                 } else {
-                    // this.state = -1; //error
                     throw new Error("message body has an invalid format. Vector or table is expected");
-                    // return cbuf;
                 }
             } else if (this.state === 3) {
                 if (this.tc === null)
-                    this.tc = new TableCheck().init(this.isSmall);
+                    this.tc = new TableCheck(this.parser).init(this.isSmall);
                 let tc = this.tc;
                 let offset = tc.offset
                 let re = tc.check(cbuf);
@@ -118,6 +122,7 @@ class StreamReader {
                     this.nrow2r = 0;
                     this.isful = true;
                     this.buf = null;
+                    this.result = tc.getResult();
                     cbuf = cbuf.slice(tc.offset-offset);
                     return cbuf;
                 } else {
@@ -127,7 +132,7 @@ class StreamReader {
                 }
             } else if (this.state === 4) {
                 if (this.vc === null) 
-                    this.vc = new VectorCheck().init(this.isSmall);
+                    this.vc = new VectorCheck(this.parser).init(this.isSmall);
                 let vc = this.vc;
                 let offset = vc.offset;
                 let re = vc.check(cbuf);
@@ -136,6 +141,7 @@ class StreamReader {
                     // this.offset += vc.offset;                   
                     this.isful = true;
                     this.buf = null;
+                    this.result = vc.getResult();
                     cbuf = cbuf.slice(vc.offset-offset);
                     return cbuf;
                 } else {

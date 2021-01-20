@@ -22,8 +22,8 @@ async function test_subscribe(){
     
     describe('#subscribe.js', function() {
         describe('#subscribe()', function() {
-            it('subscribe offset 0', async function() {
-                this.timeout(8000)
+             it('subscribe offset 0', async function() {
+                this.timeout(10000)
                 var script = '' +
                 'share streamTable(100:0, `sym`date`price`qty, [SYMBOL, DATE, DOUBLE, INT]) as trades \n'+
                 'tmp = table(symbol(`A`B`C`D`E) as sym, 2012.01.01..2012.01.05 as date, [20.5, 45.2, 15.6, 58.4, 12.0] as price, [2200, 1500, 4800, 5900, 4600] as qty) \n'+
@@ -52,7 +52,7 @@ async function test_subscribe(){
                 await client.unsubscribe(config.HOST, config.PORT, "trades", "trades_sub1")
             });
 
-            it('subscribe offset -1', async function() {
+          it('subscribe offset -1', async function() {
                 this.timeout(10000)
                 var script = '' +
                 'share streamTable(100:0, `sym`date`price`qty, [SYMBOL, DATE, DOUBLE, INT]) as trades \n'+
@@ -540,7 +540,7 @@ async function test_subscribe(){
                 assert.deepEqual(arr[0][2], 20.5)
                 assert.deepEqual(arr[0][3].toString(), '2012-6-13 13:30:10.8007006ns') 
                 await client.unsubscribe(config.HOST, config.PORT, "trades", "trades_sub1")
-            });
+            }); 
 
       /*       it('subscribe filter bool', async function() {
                 this.timeout(10000)
@@ -588,9 +588,101 @@ async function test_subscribe(){
                 }
             });
 
+            it('sub offset 0 msgAsTable false', async function() {
+                this.timeout(20000)
+                var script = '' +
+                'share streamTable(100:0, `sym`date`price`qty, [SYMBOL, DATE, DOUBLE, INT]) as trades \n'+
+                'tmp = table(symbol(`A`B`C`D`E) as sym, 2012.01.01..2012.01.05 as date, [20.5, 45.2, 15.6, 58.4, 12.0] as price, [2200, 1500, 4800, 5900, 4600] as qty) \n'+
+                'trades.append!(tmp)'
+                await myConnect.run(script)
+                var arr = []
+                function f1(msg){
+                    arr.push(msg)
+                }
+                client.subscribe(config.HOST, config.PORT, "trades", "trades_sub1", {handler:f1, offset:0, msgAsTable: false})
+                await myConnect.run("sleep(3000)")
+                assert.deepEqual(arr[0][0],['A','B','C','D','E'])
+                assert.equal(arr[0][1].toString(), '2012-1-1,2012-1-2,2012-1-3,2012-1-4,2012-1-5')
+                assert.deepEqual(arr[0][2], [20.5, 45.2, 15.6, 58.4, 12.0])
+                assert.deepEqual(arr[0][3], [2200, 1500, 4800, 5900, 4600])
+                await client.unsubscribe(config.HOST, config.PORT, "trades", "trades_sub1")
+            });
 
+            it('subscribe offset -1 msgAsTable false', async function() {
+                this.timeout(10000)
+                var script = '' +
+                'share streamTable(100:0, `sym`date`price`qty, [SYMBOL, DATE, DOUBLE, INT]) as trades \n'+
+                'tmp = table(symbol(`A`B`C`D`E) as sym, 2012.01.01..2012.01.05 as date, [20.5, 45.2, 15.6, 58.4, 12.0] as price, [2200, 1500, 4800, 5900, 4600] as qty) \n'+
+                'trades.append!(tmp)'
+                await myConnect.run(script)
+                var arr = []
+                function f1(msg){
+                    arr.push(msg)
+                }
+                client.subscribe(config.HOST, config.PORT, "trades", "trades_sub1", {handler:f1, offset:-1, msgAsTable:false})
+                await myConnect.run("sleep(2000)")
+                assert.deepEqual(arr, [])
+                //write data again, and subscriber will receive data
+                var script = '' +
+                'tmp = table(symbol(`A`B) as sym, 2012.01.06..2012.01.07 as date, [50.2, 36.5] as price, [4800, 7800] as qty) \n'+
+                'trades.append!(tmp)'
+                await myConnect.run(script)
+                await myConnect.run('sleep(3000)')
+                assert.deepEqual(arr[0][0], ['A', 'B'])
+                assert.equal(arr[0][1].toString(), '2012-1-6,2012-1-7')
+                assert.deepEqual(arr[0][2], [50.2, 36.5])
+                assert.deepEqual(arr[0][3], [4800, 7800])
+                await client.unsubscribe(config.HOST, config.PORT, "trades", "trades_sub1")
+            });
 
+            it('sub offset 0 msgAsTable true', async function() {
+                this.timeout(20000)
+                var script = '' +
+                'share streamTable(100:0, `sym`date`price`qty, [SYMBOL, DATE, DOUBLE, INT]) as trades \n'+
+                'tmp = table(symbol(`A`B`C`D`E) as sym, 2012.01.01..2012.01.05 as date, [20.5, 45.2, 15.6, 58.4, 12.0] as price, [2200, 1500, 4800, 5900, 4600] as qty) \n'+
+                'trades.append!(tmp)'
+                await myConnect.run(script)
+                var arr = []
+                function f1(msg){
+                    arr.push(msg)
+                }
+                client.subscribe(config.HOST, config.PORT, "trades", "trades_sub1", {handler:f1, offset:0, msgAsTable: true})
+                await myConnect.run("sleep(3000)")
+                assert.deepEqual(arr[0]['header'],['sym','date','price','qty'])
+                assert.deepEqual(arr[0]['body'][0],['A','B','C','D', 'E'])
+                assert.equal(arr[0]['body'][1].toString(), '2012-1-1,2012-1-2,2012-1-3,2012-1-4,2012-1-5')
+                assert.deepEqual(arr[0]['body'][2], [20.5, 45.2, 15.6, 58.4, 12.0])
+                assert.deepEqual(arr[0]['body'][3], [2200, 1500, 4800, 5900, 4600])
+                await client.unsubscribe(config.HOST, config.PORT, "trades", "trades_sub1")
+            });
 
+            it('subscribe offset -1 msgAsTable true', async function() {
+                this.timeout(10000)
+                var script = '' +
+                'share streamTable(100:0, `sym`date`price`qty, [SYMBOL, DATE, DOUBLE, INT]) as trades \n'+
+                'tmp = table(symbol(`A`B`C`D`E) as sym, 2012.01.01..2012.01.05 as date, [20.5, 45.2, 15.6, 58.4, 12.0] as price, [2200, 1500, 4800, 5900, 4600] as qty) \n'+
+                'trades.append!(tmp)'
+                await myConnect.run(script)
+                var arr = []
+                function f1(msg){
+                    arr.push(msg)
+                }
+                client.subscribe(config.HOST, config.PORT, "trades", "trades_sub1", {handler:f1, offset:-1, msgAsTable:true})
+                await myConnect.run("sleep(2000)")
+                assert.deepEqual(arr, [])
+                //write data again, and subscriber will receive data
+                var script = '' +
+                'tmp = table(symbol(`A`B) as sym, 2012.01.06..2012.01.07 as date, [50.2, 36.5] as price, [4800, 7800] as qty) \n'+
+                'trades.append!(tmp)'
+                await myConnect.run(script)
+                await myConnect.run('sleep(3000)')
+                assert.deepEqual(arr[0]['header'], ['sym', 'date', 'price', 'qty'])
+                assert.deepEqual(arr[0]['body'][0], ['A', 'B'])
+                assert.equal(arr[0]['body'][1].toString(), '2012-1-6,2012-1-7')
+                assert.deepEqual(arr[0]['body'][2], [50.2, 36.5])
+                assert.deepEqual(arr[0]['body'][3], [4800, 7800])
+                await client.unsubscribe(config.HOST, config.PORT, "trades", "trades_sub1")
+            });
 
         });
     });    

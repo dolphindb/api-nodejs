@@ -3,8 +3,9 @@
 const Util = require('../util');
 
 class VectorCheck {
-    constructor () {
+    constructor (parser) {
         this.hlen = 10;
+        this.parser = parser;
     }
     init(isSmall=true) {
         this.isSmall = isSmall;
@@ -18,7 +19,11 @@ class VectorCheck {
         this.anyrow = 0;
         this.arr = null;
         this.pos = 0;
+        this.result = [];
         return this;
+    }
+    getResult () {
+        return this.result;
     }
     readInt(bs) {
         if(this.isSmall)
@@ -49,6 +54,7 @@ class VectorCheck {
                     this.isful = true;
                     return cbuf;
                 } else {
+                    this.result = new Array(this.nrow*this.ncol);
                     if (cbuf.length === 0)
                         break;
                 }
@@ -65,6 +71,7 @@ class VectorCheck {
                         }
                         j++;
                         this.offset += j;
+                        this.result[i] = this.parser.bytes2DType(cbuf, dt);
                         cbuf = cbuf.slice(j);
                     }
                 } else {
@@ -75,6 +82,7 @@ class VectorCheck {
                             return cbuf;
                         } 
                         this.offset += s;
+                        this.result[i] = this.parser.bytes2DType(cbuf, dt);
                         cbuf = cbuf.slice(s);
                     }
                 }
@@ -96,7 +104,7 @@ class VectorCheck {
                     let df = cbuf[1];
                     if (df === 1) {
                         if (this.arr[i] === null)
-                            this.arr[i] = new VectorCheck().init(this.isSmall);
+                            this.arr[i] = new VectorCheck(this.parser).init(this.isSmall);
                         // vector
                         let vc = this.arr[i];
                         let offset = vc.offset;
@@ -104,6 +112,7 @@ class VectorCheck {
                         this.offset += vc.offset-offset;
                         if (vc.isFull()){
                             this.anyrow = vc.nrow;
+                            this.result[i] = vc.getResult();
                             cbuf = cbuf.slice(vc.offset-offset);
                         } else {
                             this.pos = i;
@@ -121,6 +130,7 @@ class VectorCheck {
                             }
                             j++;
                             this.offset += j;
+                            this.result[i] = this.parser.readPacket(cbuf).value;
                             cbuf = cbuf.slice(j)
                         } else {
                             let len = 2+Util.dtypelen(dt);
@@ -129,6 +139,7 @@ class VectorCheck {
                                 return cbuf;
                             }
                             this.offset += len;
+                            this.result[i] = this.parser.readPacket(cbuf).value;
                             cbuf = cbuf.slice(len);       
                         }
                     }
@@ -142,6 +153,7 @@ class VectorCheck {
                 this.offset += vc.offset-offset;
                 if (vc.isFull()) {
                     // this.offset += vc.offset;
+                    this.result[this.pos] = vc.getResult();
                     cbuf = cbuf.slice(vc.offset-offset);
                     ++this.pos;
                     this.state = 2;

@@ -3,8 +3,9 @@
 const VectorCheck = require("./VectorCheck");
 
 class TableCheck {
-    constructor () {
+    constructor (parser) {
         this.hlen = 10;
+        this.parser = parser;
     }
     init(isSmall=true) {
         this.isSmall = isSmall;
@@ -18,7 +19,11 @@ class TableCheck {
         this.arr = null;
         this.pos = 0;
         this.colpos = 0;
+        this.result = {};
         return this;
+    }
+    getResult () {
+        return this.result;
     }
     readInt(bs) {
         if(this.isSmall)
@@ -41,6 +46,8 @@ class TableCheck {
                 this.ncol = this.readInt(cbuf.slice(6));
                 this.offset += this.hlen;
                 this.state = 1;
+                this.result.colnames = new Array(this.ncol);
+                this.result.data = new Array(this.ncol);
                 cbuf = cbuf.slice(this.hlen);
                 if (cbuf.length === 0)
                     break;
@@ -53,6 +60,7 @@ class TableCheck {
                 j++;
                 this.state = 2;
                 this.offset += j;
+                this.result.tablename = this.parser.bytes2DType(cbuf, 18);
                 cbuf = cbuf.slice(j);
                 if (cbuf.length === 0)
                     break;
@@ -67,6 +75,7 @@ class TableCheck {
                     }
                     j++;
                     this.offset += j;
+                    this.result.colnames[i] = this.parser.bytes2DType(cbuf, 18);
                     cbuf = cbuf.slice(j);
                 }
                 this.state = 3;
@@ -81,13 +90,14 @@ class TableCheck {
                 }
                 for (let i=this.pos; i<this.ncol; i++) {
                     if (this.arr[i] === null)
-                        this.arr[i] = new VectorCheck().init(this.isSmall);
+                        this.arr[i] = new VectorCheck(this.parser).init(this.isSmall);
                     let vc = this.arr[i];
                     let offset = vc.offset;
                     let re = vc.check(cbuf);
                     this.offset += vc.offset-offset;
                     if (vc.isFull()) {
                         // this.offset += vc.offset;
+                        this.result.data[i] = vc.getResult();
                         cbuf = cbuf.slice(vc.offset-offset);
                     } else {
                         this.pos = i;

@@ -1,8 +1,8 @@
 {
-  "name": "api-nodejs-master",
-  "version": "1.0.0",
-  "description": "推荐用VScode进行开发与调试。实现同步通信基于第三方库[promise-socket](https://www.npmjs.com/package/promise-socket)，已经本地安装在./node_modules中。  \r Node.js语法查询：[廖雪峰](https://www.liaoxuefeng.com/wiki/1022910821149312)  [菜鸟教程](https://www.runoob.com/nodejs/nodejs-tutorial.html)",
-  "main": "main.js",
+  "name": "dolphindb-api-nodejs",
+  "version": "1.0.9",
+  "description": "nodejs api for dolphindb",
+  "main": "index.js",
   "directories": {
     "test": "test"
   },
@@ -15,6 +15,6 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "",
-  "license": "ISC"
+  "author": "dolphindb",
+  "license": "Apache 2.0"
 }

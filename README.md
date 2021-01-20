@@ -1,9 +1,12 @@
 # NodeJS-API
 
 ## 使用说明
+### 运行环境
+要求Nodejs版本**10.21**或以上。使用到了BigInt。
+
 ### 1. 建立连接
 ```js
-var DBconnection = require('./src/DBconnection');
+const {DBconnection} = require('dolphindb-api-nodejs');
 var conn = new DBconnection();
 await conn.connect("localhost", 8848);
 ```
@@ -77,6 +80,8 @@ runFunc(funcName, ...args)
 
 ### 4. 上传本地对象到服务器
 ```js
+const {DT} = require('dolphindb-api-nodejs')
+
 await conn.upload("a",  DT.TimeStamp("2012-06-13 13:30:10.008"));
 result = await conn.run('a');
 // 返回TimeStamp对象， 需使用toString()方法格式化输出， 结果为： 2012-6-13 13:30:10.8000000ns
@@ -89,5 +94,42 @@ upload(varnames, ...vars)
 
 上传变量格式与上传函数参数时使用的格式相同 
 
+### 5. 流数据
+#### 订阅
+```js
+const {StreamClient} = require('dolphindb-api-nodejs');
+const client = new StreamClient(8997); // 提供本地监听端口    
 
+var script = '' +
+'share streamTable(100:0, `sym`date`price`qty, [SYMBOL, DATE, DOUBLE, INT]) as trades \n'+
+'setStreamTableFilterColumn(trades, `qty) \n'+
+'tmp = table(symbol(`A`B`C`D`E) as sym, 2012.01.01..2012.01.05 as date, [20.5, 45.2, 15.6, 58.4, 12.0] as price, [2200, 1500, 4800, 5900, 4600] as qty) \n'+
+'trades.append!(tmp)'
+await conn.run(script)
+client.subscribe("localhost",8848, "trades", "trades_sub1", {handler: function(data) {console.log(data)}, offset:0,filter:Int([2200, 1500])})
+```
+函数说明：
+subscibe (host, port, tableName, actionName, options)
+- host：发布端节点的IP地址。
+- port：发布端节点的端口号。
+- tableName：发布表的名称。
+- actionName：订阅任务的名称。
+- options：可选参数，包括，
+
+    - handler：用户自定义的回调函数，用于处理每次流入的数据。  
+    - offset：整数，表示订阅任务开始后的第一条消息所在的位置。消息是流数据表中的行。如果没有指定offset，或它为负数或超过了流数据表的记录行数，订阅将会从流数据表的当前行开始。offset与流数据表创建时的第一行对应。如果某些行因为内存限制被删除，在决定订阅开始的位置时，这些行仍然考虑在内。  
+    - filter：向量，表示过滤条件。流数据表过滤列在filter中的数据才会发布到订阅端，不在filter中的数据不会发布。  
+    - allowExistTopic: bool值。
+    - msgAsTable: bool值，当值为true时，订阅到的数据包会附上table表头，格式如{header:[columes],body:[value]}，否则仅返回数据。
+    
+需要注意的是若客户端只接收到一行数据，则nodejs返回的是一维数组;若接收到多行数据时，返回的是二维数组。
+
+#### 取消订阅
+```js
+await client.unsubscribe("127.0.0.1", 8848, "trades", "trades_subs1");
+```
+函数说明：
+unsubscibe (host, port, tableName, actionName)
+
+参数意义同subscribe()函数。
 

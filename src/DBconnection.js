@@ -1,6 +1,7 @@
 'use strict';
 
 const tUtil = require('./typeUtil');
+// const Util = require('./util');
 const infolevel = require('./constants').infoLevel; 
 
 const BasicScalar = require('./BasicScalar');
@@ -23,23 +24,29 @@ class DBconnection {
         this.password = password || "";
         this.sessionID = ""; 
         this.response = "";  //store the returned message using buffer
-        if (this.username === "" || this.password === "")
-            await this.socket.connect({host: this.host, port: this.port});
-        else
-            await this.socket.connect({host:this.host, port:this.port, username:this.username, password:this.password});
+        await this.socket.connect({host: this.host, port: this.port});
+        if (this.username !== "" && this.password !== "")
+            await this.login(this.username, this.password);
+            
         await this.socket.write('API 0 8\nconnect\n');
         // console.log('send first msg');
         this.response = await this.socket.read();
         // console.log(this.response.toString('ascii'));
-        this.updateID();;
+        this.updateID();
+    }
+
+    async login(username, password) {
+        await this.run(`login("${username}", "${password}")`);
     }
 
     async reconnect () {
         this.socket = new PromiseSocket();
-        if (this.username === "" || this.password === "")
-            await this.socket.connect({host: this.host, port: this.port});
-        else
-            await this.socket.connect({host:this.host, port:this.port, username:this.username, password:this.password});
+        await this.socket.connect({host: this.host, port: this.port});
+        if (this.username !== "" && this.password !== "")
+            await this.login(this.username, this.password);
+        await this.socket.write('API 0 8\nconnect\n');
+        this.response = await this.socket.read();
+        this.updateID();
     }
 
     async close() {
@@ -53,32 +60,35 @@ class DBconnection {
 
     readAll (timeout=500) {
         return new Promise(async (resolve,reject) => {
-            let error = null;
-            this.socket.setTimeout(timeout);
-            while(true){
-                try {
-                    let chunk = await this.socket.read();
-                    this.buffer.write(chunk);
-                } catch (e) {
-                    if (e instanceof TimeoutError){
-                        break;
-                    } else {
-                        error = e;
-                        break;
-                    }
-                }
+            const socket = this.socket.stream;
+            const that = this;
+
+            function chunkHandler (chunck) {
+                that.buffer.write(chunck);
             }
-            this.socket.setTimeout(0);
-            if (error !== null){
-                reject(error);
-            } else {
+
+            function errorHandler (e) {
+                reject(e);
+            }
+
+            let data = await this.socket.read();
+            this.buffer.write(data);
+
+            socket.setTimeout(timeout);
+            socket.resume();
+            socket.once('timeout', () => {
+                socket.removeListener('data', chunkHandler);
+                socket.removeListener('error', errorHandler)
                 let rbuf = this.buffer.readAll();
                 this.buffer.reset();
                 if (infolevel >= 2)
                     console.log(`read all ${rbuf.length} bytes`);
-                await this.reconnect();
                 resolve(rbuf);
-            }
+            })
+
+            socket.on('data', chunkHandler);
+
+            socket.once('error', errorHandler);
         })
     }
 
@@ -89,15 +99,15 @@ class DBconnection {
         let msg = 'API ' + this.sessionID + ' ' + len.toString() + '\n' + 'script' + '\n' + script;
         await this.socket.write(msg);
         // console.log('script Msg sent!');
-        //this.response = await this.socket.read();
+        // this.response = await this.socket.read();
         this.response = await this.readAll();
-        // console.log(Util.formatBytes(this.response));
+        //console.log(Util.formatBytes(this.response));
         this.updateID();
         let res = this.parseResult();
         return res
     }
 
-    status () {
+    head () {
         let endPos = this.response.indexOf(32);
         let rest = this.response.slice(endPos + 1);
         endPos = rest.indexOf(32);  //' '
@@ -113,18 +123,21 @@ class DBconnection {
         rest = rest.slice(endPos + 1);
         return {
             status: status,
+            num: num,
             isSmall: isSmall,
             rest: rest
         }
     }
 
     parseResult () {
-        let status = this.status();
-        this.parser.isSmall = status.isSmall===1;
+        let head = this.head();
+        this.parser.isSmall = head.isSmall===1;
         if (infolevel >= 1)
-            console.log("status: "+status.status+"\nendian: "+(status.isSmall?'LE':'BE'))
+            console.log("status: "+head.status+"\nendian: "+(head.isSmall?'LE':'BE'))
         //extract result
-        let res = this.parser.readPacket(status.rest);
+        if (head.rest.length === 0)
+            return;
+        let res = this.parser.readPacket(head.rest);
         //console.log(res);
         return res.value;
     }
@@ -186,14 +199,8 @@ class DBconnection {
         this.response = await this.socket.read();
         // console.log(Util.formatBytes(this.response))
         this.updateID();
-        let status = this.status();
-        // console.log(status.rest);
-        if (status.status === "OK")
-            return true;
-        else{
-            console.log(status.status);
-            return false;
-        }
+        let res = this.parseResult();
+        return res;
     }
 }
 module.exports = DBconnection;
